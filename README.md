@@ -38,11 +38,12 @@ following command:
 ## Usage
 To run this kit, there are three simple steps.
 
-1. Extract all the codebases you wish to compare to individually named
+First, extract all the codebases you wish to compare to individually named
 directories within `libraries`. For example, if you wish to find clones across
 projects `foo`, `bar`, and `baz`, start by extracting them to `libraries/foo/`,
 `libraries/bar/`, and `libraries/baz`, respectively.
-2. Configure the settings with which Deckard should be run. This is done by
+
+Second, configure the settings with which Deckard should be run. This is done by
 writing them into the arrays on lines 8 and 9 of `runner.sh`. Here are the
 default values:
 
@@ -56,7 +57,8 @@ considered "clones". The number is fairly mysterious, but for reference,
 Deckard's default is 0.95. With the arrays set as they are above, each pair of
 codebases will be compared nine times, once for each combination of token and
 similarity settings.
-3. Invoke the runner script with:
+
+Finally, invoke the runner script with:
 
 	./runner.sh
 
@@ -65,10 +67,13 @@ and the number and sizes of your codebases, however it prints diagnostic
 information the whole while, and issues a terminal bell when processing has
 completed, so it is pretty convenient for use in batch processing jobs.
 
+### Results
 After running the kit, results are saved to the `results` directory. Pair-wise
 clone lists are stored in subdirectories named according to the settings with
 which they were run. Aggregate data is written to `results/all_counts.csv`.
 
+
+## Notes
 Please report any [issues](https://github.com/Programming-Systems-Lab/deckard-analysis-kit/issues)
 you may encounter. Thanks!
 
