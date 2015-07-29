@@ -3,12 +3,12 @@
 ## Premise
 [Deckard](https://github.com/skyhover/Deckard) is a static code clone detection
 system (2008 paper [here](http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4814143))
-which finds semantically similar code segments, "clones",  within a codebase.
+that finds semantically similar code segments, "clones",  within a codebase.
 This kit provides a convenient set of scripts for finding code clones across
-two different codebases by essentially combining them into one, and then
+two _different_ codebases by essentially combining them into one, and then
 filtering out same-origin clones. It is also equipped for automation, allowing
 for multiple different codebases to be compared in all pair-wise combinations,
-and allowing the analysis to be run at different settings (see 'Configuration'
+and allowing analysis to be run at different settings (see 'Kit Configuration'
 below).
 
 
@@ -45,8 +45,10 @@ projects `foo`, `bar`, and `baz`, start by extracting them to `libraries/foo/`,
 2. Configure the settings with which Deckard should be run. This is done by
 writing them into the arrays on lines 8 and 9 of `runner.sh`. Here are the
 default values:
+
 	declare -a toks=("50" "100" "500")
 	declare -a sims=("0.85" "0.95" "0.98")
+
 The first array, `toks`, controls the approximate number of tokens in each
 clone. Keep in mind there are about 7 tokens per line of Java code. The second
 array, `sims`, controls how similar code segments need to be in order to be
@@ -55,16 +57,18 @@ Deckard's default is 0.95. With the arrays set as they are above, each pair of
 codebases will be compared nine times, once for each combination of token and
 similarity settings.
 3. Invoke the runner script with:
+
 	./runner.sh
+
 The runner script may take some time to complete, depending on your settings
 and the number and sizes of your codebases, however it prints diagnostic
 information the whole while, and issues a terminal bell when processing has
 completed, so it is pretty convenient for use in batch processing jobs.
 
 After running the kit, results are saved to the `results` directory. Pair-wise
-clone listings are stored in subdirectories for the settings with which they
-were run. Aggregate data is written to `results/all_counts.csv`.
+clone lists are stored in subdirectories named according to the settings with
+which they were run. Aggregate data is written to `results/all_counts.csv`.
 
 Please report any [issues](https://github.com/Programming-Systems-Lab/deckard-analysis-kit/issues)
-you encounter. Thanks!
+you may encounter. Thanks!
 
