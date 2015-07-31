@@ -113,6 +113,14 @@ else
 	echo "$3,$4,$1,$2,0,0,0,0" >> "$ANALYSIS_ROOT/results/all_counts.csv"
 fi
 
+# Report Java 1.4 incompatibility and syntax errors
+NUM_ERRORS=$(grep -c 'syntax error:'\
+	"$ANALYSIS_ROOT/test/deckard_times/vgen_"$3"_2")
+if [ "$NUM_ERRORS" -gt 0 ]; then
+	echo "[38;5;208m$NUM_ERRORS Syntax errors reported[39m"
+	echo "$1,$2,$NUM_ERRORS" >> "$ANALYSIS_ROOT/results/error_log.csv"
+fi
+
 # Done
 msg_start "Results file saved"
 msg_ok
