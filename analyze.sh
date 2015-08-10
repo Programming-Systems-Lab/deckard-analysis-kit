@@ -36,6 +36,7 @@ msg_ok
 msg_start "Running ctags to locate method headings"
 cd "$ANALYSIS_ROOT/test/"
 ctags -R -x -f- "src/" | grep '^[^ ]\+\s\+method' | sed 's/^[^ ]\+\s\+method\s\+//' | sort '-k2,2' '-k1,1n' > "tags"
+ctags -R -x -f- "src/" | grep '^[^ ]\+\s\+package' | awk '{print $4 " " $1}' > "packages"
 cd "$CURRENT_PATH"
 msg_ok
 
@@ -43,7 +44,7 @@ msg_ok
 msg_start "Running Deckard code-clone analysis"
 cd "$ANALYSIS_ROOT/test/"
 bash $DECKARD_SCRIPT > /dev/null
-cat "deckard_clusters/cluster_vdb_$3""_2_allg_$4""_30" | awk '{print $4 " " $5}' > "raw_output"
+cat "deckard_clusters/cluster_vdb_$3""_2_allg_$4""_30" | awk '{print $4 " " $5 " " $2}' > "raw_output"
 cd "$CURRENT_PATH"
 msg_ok
 
@@ -57,6 +58,8 @@ while read LINE; do
 	LINE_NUMBER=$(echo $LINE | sed 's/^[^:]\+:\([0-9]\+\):.*$/\1/')
 	NUM_LINES=$(echo $LINE | sed 's/^[^:]\+:[0-9]\+:\([0-9]\+\).*$/\1/')
 	FILE_NAME=$(echo $LINE | sed 's/^\([^ ]\+\) .*$/\1/')
+	DIST=$(echo $LINE | sed 's/^.* dist:\([0-9\.]\+\)$/\1/')
+	PACKAGE=$(cat "$ANALYSIS_ROOT/test/packages" | grep "$FILE_NAME" | cut -f2 "-d " | cut -f1 "-d.")
 	METHOD=$({\
 	cat "$ANALYSIS_ROOT/test/tags"\
 		| grep "$FILE_NAME";\
@@ -66,10 +69,14 @@ while read LINE; do
 		| grep -B1 "$LINE_NUMBER [^ ]\+$"\
 		| head -n 1)
 	if [ -z "$(echo $METHOD | grep "^[^ ]\+ [^ ]\+ [^ ]")" ]; then continue; fi
+	METHOD_LINE="$(echo $METHOD | cut -f1 '-d ')"
 	METHOD=$(echo "$METHOD"\
-		| sed 's/^[^ ]\+ [^ ]\+ [^ ]\+ \([^(]*[^ (]\) *(.*$/\1/'\
+		| sed 's/ \(public\|private\|static\|final\)//g'\
+		| sed 's/^[^ ]\+ [^ ]\+ \([^(]*[^ (]\) *(.*$/\1/'\
 		| tr ' ' '-')
-	echo "$FILE_NAME:$LINE_NUMBER-$(( LINE_NUMBER+NUM_LINES )):$METHOD" >> "$ANALYSIS_ROOT/test/merged_output"
+	echo "$FILE_NAME:$METHOD_LINE:$METHOD@$PACKAGE" >> "$ANALYSIS_ROOT/results/methods_tok_"$3"_sim_"$4".txt"
+	echo "$FILE_NAME:$METHOD_LINE:$LINE_NUMBER-$(( LINE_NUMBER+NUM_LINES )):$METHOD@$DIST"\
+		>> "$ANALYSIS_ROOT/test/merged_output"
 done < "$ANALYSIS_ROOT/test/raw_output"
 msg_ok
 
@@ -83,8 +90,27 @@ GROUP1_ID=""
 while read LINE; do
 	if [ -z "$LINE" ]; then
 		for i in "${GROUP1[@]}"; do
+			i=($i)
 			for j in "${GROUP2[@]}"; do
-				echo "$i $j" >> "$ANALYSIS_ROOT/test/formatted_output"
+				j=($j)
+				echo "${i[0]} ${j[0]}"\
+					| sed 's/:[0-9]\+:/:/g'\
+					>> "$ANALYSIS_ROOT/test/formatted_output"
+
+				# If clones are long enough, add to the nerest neighbors file
+				NUM_LINES_i="$(echo "($(echo "${i[0]}" | cut -f3 "-d:")) * -1" | bc)"
+				NUM_LINES_j="$(echo "($(echo "${j[0]}" | cut -f3 "-d:")) * -1" | bc)"
+				if [ "$NUM_LINES_i" -lt 10 ] || [ "$NUM_LINES_j" -lt 10 ]; then
+					continue
+				fi
+				if [ "${i[1]}" == "0.0" ]; then
+					echo -e "${i[0]} ${j[0]} ${j[1]}\n${j[0]} ${i[0]} ${j[1]}"\
+						>> "$ANALYSIS_ROOT/results/neighbors_tok_"$3"_sim_"$4".txt"
+				fi
+				if [ "${j[1]}" == "0.0" ]; then
+					echo -e "${j[0]} ${i[0]} ${i[1]}\n${i[0]} ${j[0]} ${i[1]}"\
+						>> "$ANALYSIS_ROOT/results/neighbors_tok_"$3"_sim_"$4".txt"
+				fi
 			done
 		done
 		GROUP1=()
@@ -92,12 +118,13 @@ while read LINE; do
 		GROUP1_ID=""
 		continue
 	fi
-	ID=$(echo "$LINE" | cut -f2 "-d/")
+	LINE=($LINE)
+	ID=$(echo "${LINE[0]}" | cut -f2 "-d/")
 	if [ -z "$GROUP1_ID" ]; then GROUP1_ID=$ID; fi
 	if [ "$ID" == "$GROUP1_ID" ]; then
-		GROUP1+=($LINE)
+		GROUP1+=("${LINE[0]}@${LINE[1]}")
 	else
-		GROUP2+=($LINE)
+		GROUP2+=("${LINE[0]}@${LINE[1]}")
 	fi
 done < "$ANALYSIS_ROOT/test/merged_output"
 IFS=$OLDIFS
@@ -105,8 +132,8 @@ IFS=$OLDIFS
 if [ "$?" == "0" ]; then
 	msg_ok
 	echo -n "$3,$4,$1,$2," >> "$ANALYSIS_ROOT/results/all_counts.csv"
-	echo -n "$(cat "$ANALYSIS_ROOT/results/clones_$1""_$2"".csv"\
-		| wc | sed 's/^\s*\([0-9]\+\)\s.*$/\1/')," >> "$ANALYSIS_ROOT/results/all_counts.csv"
+	echo -n "$(cat "$ANALYSIS_ROOT/results/clones_$1""_$2"".csv" | wc -l),"\
+		>> "$ANALYSIS_ROOT/results/all_counts.csv"
 	cat "$ANALYSIS_ROOT/test/count_output" >> "$ANALYSIS_ROOT/results/all_counts.csv"
 else
 	msg_err
