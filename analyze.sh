@@ -69,6 +69,8 @@ while read LINE; do
 		| grep -B1 "$LINE_NUMBER [^ ]\+$"\
 		| head -n 1)
 	if [ -z "$(echo $METHOD | grep "^[^ ]\+ [^ ]\+ [^ ]")" ]; then continue; fi
+	if [[ "$METHOD" =~ " next" ]]; then continue; fi
+	if [[ "$METHOD" =~ " read" ]]; then continue; fi
 	METHOD_LINE="$(echo $METHOD | cut -f1 '-d ')"
 	METHOD=$(echo "$METHOD"\
 		| sed 's/ \(public\|private\|static\|final\)//g'\
