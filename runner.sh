@@ -8,8 +8,9 @@ function msg_ok(){ echo -e "\033[38;5;246m[ \033[38;5;118mOK \033[38;5;246m]\033
 function msg_err(){ echo -e "\033[38;5;246m[ \033[38;5;161mERROR \033[38;5;246m]\033[39m"; }
 
 # Declare target parameters
-declare -a toks=("90")
-declare -a sims=("0.90")
+declare -a toks=("90" "135" "180")
+declare -a sims=("0.9")
+LABELING_K=5
 #declare -a toks=("50" "100" "500")
 #declare -a sims=("0.85" "0.95" "0.98")
 
@@ -51,6 +52,8 @@ for sim in "${sims[@]}"; do
 
 	# Aggregate neighbor data
 	echo -e "\n[1;39m--- Analyzing Nearest-Neighbors ($tok/$sim) ---[0m"
+	cp "$ANALYSIS_ROOT/results/label_predictions.csv"\
+		"$ANALYSIS_ROOT/results/label_predictions_tok_"$tok"_sim_"$sim"_k_"$LABELING_K".csv"
 	msg_start "Sorting method list"
 	mv "$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"\
 		"$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt.bkp"
@@ -65,34 +68,54 @@ for sim in "${sims[@]}"; do
 		GUESS_LABELS=""
 		BEST_NEIGHBOR=""
 		SIMILARITY=""
+		declare -A LABEL_SCORES
+		LABEL_SCORES["R5P1Y12"]=0
+		LABEL_SCORES["R5P1Y13"]=0
+		LABEL_SCORES["R5P1Y14"]=0
 		for METHOD2 in $(\
 			cat "$ANALYSIS_ROOT/results/neighbors_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/:[0-9]\+-[0-9]\+:/:/g'\
-				| grep "^$METHOD1 "\
+				| grep "^$(echo "$METHOD1" | sed 's/[][]/./g')\\b"\
 				| awk '{print $3 " " $2}'\
 				| sort "-k2,2d" "-k1,1n"\
 				| uniq -f1\
 				| sort "-k1,1nr"\
-				| tail -n5\
+				| tail "-n$LABELING_K"\
 				| tr ' ' '@'); do
 			BEST_NEIGHBOR="$(echo "$METHOD2" | cut -f2 '-d@')"
 			SIMILARITY="$(echo "$METHOD2" | cut -f1 '-d@')"
-			GUESS_LABELS="$GUESS_LABELS\n$(grep "^$BEST_NEIGHBOR"\
+			GUESS_LABEL="$(grep "^$(echo "$BEST_NEIGHBOR" | sed 's/[][]/./g')\\b"\
 				"$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/^[^@]*@\(.*\)$/\1/')"
+			LABEL_SCORES["$GUESS_LABEL"]=$(echo\
+				"${LABEL_SCORES["$GUESS_LABEL"]} + $SIMILARITY" | bc)
+#			GUESS_LABELS="$GUESS_LABELS\n$GUESS_LABEL"
 		done
-		GUESS_LABEL=$(echo -e "$GUESS_LABELS"\
-			| tail -n +2\
-			| sort | uniq -c\
-			| sort "-k1,1nr"\
-			| head -n1\
-			| sed 's/^\s\+//'\
-			| cut -f2 '-d ')
+#		GUESS_LABEL=$(echo -e "$GUESS_LABELS"\
+#			| tail -n +2\
+#			| sort | uniq -c\
+#			| sort "-k1,1nr"\
+#			| head -n1\
+#			| sed 's/^\s\+//'\
+#			| cut -f2 '-d ')
+		if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y13"]}")" -ne 0 ]; then
+			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+				GUESS_LABEL="R5P1Y12"
+			else
+				GUESS_LABEL="R5P1Y14"
+			fi
+		else
+			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y13"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+				GUESS_LABEL="R5P1Y13"
+			else
+				GUESS_LABEL="R5P1Y14"
+			fi
+		fi
 		if [ -n "$GUESS_LABEL" ]; then
-			METHOD1="$(grep "$METHOD1"\
+			METHOD1="$(grep "$(echo "$METHOD1" | sed 's/[][]/./g')"\
 				"$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/^src\/CJ_201._\([^\/]\+\)\/\([^\.]\+\)\.java:\([0-9]\+\)[^0-9]*[:-]\([^:-@]\+\)@\(.*\)$/\5.\1.\2.\4:\3/')"
-			METHOD2="$(grep "$METHOD2"\
+			METHOD2="$(grep "$(echo "$METHOD2" | sed 's/[][]/./g')"\
 				"$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/^src\/CJ_201._\([^\/]\+\)\/\([^\.]\+\)\.java:\([0-9]\+\)[^0-9]*[:-]\([^:-@]\+\)@\(.*\)$/\5.\1.\2.\4:\3/')"
 			RESULT="$METHOD1"
@@ -105,7 +128,7 @@ for sim in "${sims[@]}"; do
 			else
 				RESULT="$RESULT, no"
 			fi
-			echo "$RESULT" >> "$ANALYSIS_ROOT/results/label_predictions.csv"
+			echo "$RESULT" >> "$ANALYSIS_ROOT/results/label_predictions_tok_"$tok"_sim_"$sim"_k_"$LABELING_K".csv"
 		fi
 	done
 	msg_ok
