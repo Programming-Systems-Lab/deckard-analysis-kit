@@ -1,18 +1,16 @@
 #!/bin/bash
 
-# Configure
+# Declare target parameters
+declare -a toks=("90" "135" "180" "270")
+declare -a sims=("0.85" "0.9" "0.95")
+LABELING_K=5
+
+# Configure the script
 ANALYSIS_ROOT="$( cd "$( dirname "$0" )" && pwd )"
 SRC_DIR="$ANALYSIS_ROOT/libraries/"
 function msg_start(){ echo -en "\033[38;5;246m$1...\033[39m   "; }
 function msg_ok(){ echo -e "\033[38;5;246m[ \033[38;5;118mOK \033[38;5;246m]\033[39m"; }
 function msg_err(){ echo -e "\033[38;5;246m[ \033[38;5;161mERROR \033[38;5;246m]\033[39m"; }
-
-# Declare target parameters
-declare -a toks=("90" "135" "180")
-declare -a sims=("0.9")
-LABELING_K=5
-#declare -a toks=("50" "100" "500")
-#declare -a sims=("0.85" "0.95" "0.98")
 
 # Iterate through analysis settings
 for tok in "${toks[@]}"; do
@@ -69,19 +67,29 @@ for sim in "${sims[@]}"; do
 		BEST_NEIGHBOR=""
 		SIMILARITY=""
 		declare -A LABEL_SCORES
+		LABEL_SCORES["R5P1Y11"]=0
 		LABEL_SCORES["R5P1Y12"]=0
 		LABEL_SCORES["R5P1Y13"]=0
 		LABEL_SCORES["R5P1Y14"]=0
-		for METHOD2 in $(\
+		METHOD2_LIST=$(\
 			cat "$ANALYSIS_ROOT/results/neighbors_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/:[0-9]\+-[0-9]\+:/:/g'\
 				| grep "^$(echo "$METHOD1" | sed 's/[][]/./g')\\b"\
 				| awk '{print $3 " " $2}'\
 				| sort "-k2,2d" "-k1,1n"\
 				| uniq -f1\
-				| sort "-k1,1nr"\
-				| tail "-n$LABELING_K"\
-				| tr ' ' '@'); do
+				| sort "-k1,1nr")
+		TEMP_K=$LABELING_K
+		LOW=$(echo $METHOD2_LIST | tail "-n$LABELING_K" | head -n1 | cut -f1 '-d ')
+		for i in `seq $LABELING_K 1000`; do
+			TEST=$(echo $METHOD2_LIST | tail "-n$i" | head -n1 | cut -f1 '-d ')
+			if [ "$TEST" == "$LOW" ]; then
+				TEMP_K=$i
+			else
+				break
+			fi
+		done
+		for METHOD2 in $(echo $METHOD2_LIST | tail "-n$TEMP_K" | tr ' ' '@'); do
 			BEST_NEIGHBOR="$(echo "$METHOD2" | cut -f2 '-d@')"
 			SIMILARITY="$(echo "$METHOD2" | cut -f1 '-d@')"
 			GUESS_LABEL="$(grep "^$(echo "$BEST_NEIGHBOR" | sed 's/[][]/./g')\\b"\
@@ -89,26 +97,35 @@ for sim in "${sims[@]}"; do
 				| sed 's/^[^@]*@\(.*\)$/\1/')"
 			LABEL_SCORES["$GUESS_LABEL"]=$(echo\
 				"${LABEL_SCORES["$GUESS_LABEL"]} + $SIMILARITY" | bc)
-#			GUESS_LABELS="$GUESS_LABELS\n$GUESS_LABEL"
 		done
-#		GUESS_LABEL=$(echo -e "$GUESS_LABELS"\
-#			| tail -n +2\
-#			| sort | uniq -c\
-#			| sort "-k1,1nr"\
-#			| head -n1\
-#			| sed 's/^\s\+//'\
-#			| cut -f2 '-d ')
-		if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y13"]}")" -ne 0 ]; then
-			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
-				GUESS_LABEL="R5P1Y12"
+		if [ -z "$BEST_NEIGHBOR" ]; then continue; fi;
+		if [ "$(bc <<< "${LABEL_SCORES["R5P1Y11"]} > ${LABEL_SCORES["R5P1Y12"]}")" -ne 0 ]; then
+			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y11"]} > ${LABEL_SCORES["R5P1Y13"]}")" -ne 0 ]; then
+				if [ "$(bc <<< "${LABEL_SCORES["R5P1Y11"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+					GUESS_LABEL="R5P1Y11"
+				else
+					GUESS_LABEL="R5P1Y14"
+				fi
 			else
-				GUESS_LABEL="R5P1Y14"
+				if [ "$(bc <<< "${LABEL_SCORES["R5P1Y13"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+					GUESS_LABEL="R5P1Y13"
+				else
+					GUESS_LABEL="R5P1Y14"
+				fi
 			fi
 		else
-			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y13"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
-				GUESS_LABEL="R5P1Y13"
+			if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y13"]}")" -ne 0 ]; then
+				if [ "$(bc <<< "${LABEL_SCORES["R5P1Y12"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+					GUESS_LABEL="R5P1Y12"
+				else
+					GUESS_LABEL="R5P1Y14"
+				fi
 			else
-				GUESS_LABEL="R5P1Y14"
+				if [ "$(bc <<< "${LABEL_SCORES["R5P1Y13"]} > ${LABEL_SCORES["R5P1Y14"]}")" -ne 0 ]; then
+					GUESS_LABEL="R5P1Y13"
+				else
+					GUESS_LABEL="R5P1Y14"
+				fi
 			fi
 		fi
 		if [ -n "$GUESS_LABEL" ]; then
