@@ -2,8 +2,8 @@
 
 # Declare target parameters
 declare -a toks=("90" "135" "180" "270")
-declare -a sims=("0.85" "0.9" "0.95")
-LABELING_K=5
+declare -a sims=("0.9" "0.95")
+LABELING_K=1
 
 # Configure the script
 ANALYSIS_ROOT="$( cd "$( dirname "$0" )" && pwd )"
@@ -22,31 +22,31 @@ for sim in "${sims[@]}"; do
 	fi
 
 	# Truncate the packages and neighbors files
-	echo
-	> "$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"
-	> "$ANALYSIS_ROOT/results/neighbors_tok_"$tok"_sim_"$sim".txt"
-
-	# Iterate through library names
-	for i in $(ls "$SRC_DIR");do
-	for j in $(ls "$SRC_DIR");do
-	if [ "$i" = "temp" ] || [ "$j" = "temp" ]; then continue; fi
-	if [[ "$j" > "$i" ]]; then
-
-		# Run the analysis script
-		bash "$ANALYSIS_ROOT/analyze.sh" $i $j $tok $sim
-
-		# Catch errors
-		if [ "$?" -ne 0 ]; then exit 1; fi
-
-		# Collect the results
-		if [ -f "$ANALYSIS_ROOT/results/clones_$i""_$j"".csv" ];then
-			mv $ANALYSIS_ROOT/results/clones_$i"_"$j".csv" $ANALYSIS_ROOT/results/tok_$tok"_sim_"$sim"/"
-		else
-			touch $ANALYSIS_ROOT/results/tok_$tok"_sim_"$sim/clones_$i"_"$j".csv"
-		fi
-	fi
-	done
-	done
+#	echo
+#	> "$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"
+#	> "$ANALYSIS_ROOT/results/neighbors_tok_"$tok"_sim_"$sim".txt"
+#
+#	# Iterate through library names
+#	for i in $(ls "$SRC_DIR");do
+#	for j in $(ls "$SRC_DIR");do
+#	if [ "$i" = "temp" ] || [ "$j" = "temp" ]; then continue; fi
+#	if [[ "$j" > "$i" ]]; then
+#
+#		# Run the analysis script
+#		bash "$ANALYSIS_ROOT/analyze.sh" $i $j $tok $sim
+#
+#		# Catch errors
+#		if [ "$?" -ne 0 ]; then exit 1; fi
+#
+#		# Collect the results
+#		if [ -f "$ANALYSIS_ROOT/results/clones_$i""_$j"".csv" ];then
+#			mv $ANALYSIS_ROOT/results/clones_$i"_"$j".csv" $ANALYSIS_ROOT/results/tok_$tok"_sim_"$sim"/"
+#		else
+#			touch $ANALYSIS_ROOT/results/tok_$tok"_sim_"$sim/clones_$i"_"$j".csv"
+#		fi
+#	fi
+#	done
+#	done
 
 	# Aggregate neighbor data
 	echo -e "\n[1;39m--- Analyzing Nearest-Neighbors ($tok/$sim) ---[0m"
@@ -71,32 +71,34 @@ for sim in "${sims[@]}"; do
 		LABEL_SCORES["R5P1Y12"]=0
 		LABEL_SCORES["R5P1Y13"]=0
 		LABEL_SCORES["R5P1Y14"]=0
-		METHOD2_LIST=$(\
+		METHOD2_LIST=($(\
 			cat "$ANALYSIS_ROOT/results/neighbors_tok_"$tok"_sim_"$sim".txt"\
 				| sed 's/:[0-9]\+-[0-9]\+:/:/g'\
 				| grep "^$(echo "$METHOD1" | sed 's/[][]/./g')\\b"\
 				| awk '{print $3 " " $2}'\
 				| sort "-k2,2d" "-k1,1n"\
 				| uniq -f1\
-				| sort "-k1,1nr")
+				| sort "-k1,1nr"\
+				| tr ' ' '@'))
 		TEMP_K=$LABELING_K
-		LOW=$(echo $METHOD2_LIST | tail "-n$LABELING_K" | head -n1 | cut -f1 '-d ')
-		for i in `seq $LABELING_K 1000`; do
-			TEST=$(echo $METHOD2_LIST | tail "-n$i" | head -n1 | cut -f1 '-d ')
+		LOW=$(printf '%s\n' "${METHOD2_LIST[@]}" | tail "-n$LABELING_K" | head -n1 | cut -f1 '-d@')
+		for i in `seq $LABELING_K 999`; do
+			TEST=$(printf '%s\n' "${METHOD2_LIST[@]}" | tail "-n$i" | head -n1 | cut -f1 '-d@')
 			if [ "$TEST" == "$LOW" ]; then
 				TEMP_K=$i
 			else
 				break
 			fi
 		done
-		for METHOD2 in $(echo $METHOD2_LIST | tail "-n$TEMP_K" | tr ' ' '@'); do
+		METHOD2_K_LIST=($(printf '%s\n' "${METHOD2_LIST[@]}" | tail "-n$TEMP_K"))
+		for METHOD2 in ${METHOD2_K_LIST[@]}; do
 			BEST_NEIGHBOR="$(echo "$METHOD2" | cut -f2 '-d@')"
 			SIMILARITY="$(echo "$METHOD2" | cut -f1 '-d@')"
 			GUESS_LABEL="$(grep "^$(echo "$BEST_NEIGHBOR" | sed 's/[][]/./g')\\b"\
 				"$ANALYSIS_ROOT/results/methods_tok_"$tok"_sim_"$sim".txt"\
-				| sed 's/^[^@]*@\(.*\)$/\1/')"
+				| cut -f2 '-d@')"
 			LABEL_SCORES["$GUESS_LABEL"]=$(echo\
-				"${LABEL_SCORES["$GUESS_LABEL"]} + $SIMILARITY" | bc)
+				"${LABEL_SCORES["$GUESS_LABEL"]} + 1000.0 - $SIMILARITY" | bc)
 		done
 		if [ -z "$BEST_NEIGHBOR" ]; then continue; fi;
 		if [ "$(bc <<< "${LABEL_SCORES["R5P1Y11"]} > ${LABEL_SCORES["R5P1Y12"]}")" -ne 0 ]; then
